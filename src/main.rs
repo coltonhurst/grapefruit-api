@@ -1,48 +1,107 @@
-use rocket::serde::json::{Json, Value, json};
-use rocket::serde::{Serialize, Deserialize};
+use rocket::serde::json::Json;
+use rocket::serde::{Deserialize, Serialize};
 
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
 
-#[derive(Deserialize)]
-struct Member {
+/* ----- API Contracts ------ */
+
+#[derive(Deserialize, Serialize)]
+struct MemberContract {
     email: String,
     username: String,
-    password: String,
+    guid: Option<String>,
 }
 
-/* ----- GET ----- */
+/* ----- /v1/member ----- */
 
-#[get("/v1/member/<guid>")]
-fn get_member(guid: &str) -> String {
-    format!("Return the member with guid id: {}", guid)
+/*
+    Get member details. Requires Authorization
+    header.
+*/
+/*#[get("/v1/member/<guid>")]
+fn get_member(guid: &str) -> Json<MemberContract> {
+    // fake member GET
+    let randomMember = Json<MemberContract> {
+        email: String::from("joe@gmail.com"),
+        username: String::from("joe"),
+        guid: Some(String::from(guid))
+    };
+
+    return randomMember;
+}*/
+
+/*
+    Create a new member! Provide the username
+    and email, and it will return the
+    same object back with the member guid.
+    Authorization header required, username
+    in header should match username from body.
+
+    Expects:
+    - Authorization header
+      - Basic
+      - username:password
+      - encoded base64
+    - The following JSON body:
+    {
+        "username": "joe",
+        "email": "joe@gmail.com",
+    }
+
+    Returns:
+    - The following JSON body:
+    {
+        "username": "joe",
+        "email": "joe@gmail.com",
+        "guid": "af9f428b-4314-4bf2-b65e-84056822044a"
+    }
+*/
+#[post("/v1/member", data = "<member>")]
+fn post_member(mut member: Json<MemberContract>) -> Json<MemberContract> {
+    // fake member creation
+    member.guid = Some(String::from("af9f428b-4314-4bf2-b65e-84056822044a"));
+    return member;
 }
 
-/* ----- POST (CREATE) ----- */
+/*
+    Update a member. The guid determines the member,
+    and the Authorization header authenticates.
+    Returns the updated values.
 
-#[post("/v1/member/<username>")]
-fn post_member(username: &str) -> String {
-    format!("Creating the member with username: {}", username)
+    Expects:
+    - Authorization header
+      - Basic
+      - username:password
+      - encoded base64
+    - The following JSON body:
+    {
+        "username": "joe",
+        "email": "joe2@gmail.com"
+    }
+
+    Returns:
+    - The following JSON body:
+    {
+        "username": "joe",
+        "email": "joe2@gmail.com",
+        "guid": "af9f428b-4314-4bf2-b65e-84056822044a"
+    }
+*/
+#[put("/v1/member/<guid>", data = "<member>")]
+fn put_member(guid: &str, mut member: Json<MemberContract>) -> Json<MemberContract> {
+    // fake member update
+    member.guid = Some(String::from(guid));
+    return member;
 }
 
-#[post("/v2/member", data = "<member>")]
-fn post_member_v2(member: Json<Member>) -> String {
-    format!("Creating the member {}", member.email)
-}
+/*
+    Delete a member account. Requires the
+    Authorization header.
 
-/* ----- PUT (UPDATE) ----- */
-
-#[put("/v1/member/<guid>")]
-fn put_member(guid: &str) -> String {
-    format!("Updating the member with guid: {}", guid)
-}
-
-#[put("/v2/member/<guid>", data="<member>")]
-fn put_member_v2(guid: &str, member: Json<Member>) -> String {
-    format!("Updating guid {}, username is now {}", guid, member.username)
-}
-
-/* ----- DELETE ----- */
-
+    Expects:
+    - Authorization header
+*/
 #[delete("/v1/member/<guid>")]
 fn delete_member(guid: &str) -> String {
     format!("Deleting the member with guid: {}", guid)
@@ -52,10 +111,5 @@ fn delete_member(guid: &str) -> String {
 
 #[launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", routes![get_member, post_member, put_member, delete_member, post_member_v2, put_member_v2])
+    rocket::build().mount("/", routes![post_member, put_member, delete_member])
 }
-
-
-
-
-
