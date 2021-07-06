@@ -19,17 +19,17 @@ struct MemberContract {
     Get member details. Requires Authorization
     header.
 */
-/*#[get("/v1/member/<guid>")]
+#[get("/v1/member/<guid>")]
 fn get_member(guid: &str) -> Json<MemberContract> {
     // fake member GET
-    let randomMember = Json<MemberContract> {
+    let random_member = MemberContract {
         email: String::from("joe@gmail.com"),
         username: String::from("joe"),
         guid: Some(String::from(guid))
     };
 
-    return randomMember;
-}*/
+    return Json(random_member);
+}
 
 /*
     Create a new member! Provide the username
@@ -111,5 +111,5 @@ fn delete_member(guid: &str) -> String {
 
 #[launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", routes![post_member, put_member, delete_member])
+    rocket::build().mount("/", routes![get_member, post_member, put_member, delete_member])
 }
