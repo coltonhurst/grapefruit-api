@@ -72,8 +72,8 @@ fn login(member: Json<Member>) -> Json<Member> {
     let random_member = Member {
       authorization: member.authorization.clone(),
       email: member.email.clone(),
-      username: member.username.clone(),
-      guid: Some(String::from("fake-guid")),
+      username: Some(String::from("kotrunga")),
+      guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
       new_authorization: None,
       error: Some(error)
     };
@@ -151,7 +151,7 @@ fn delete_post(guid: &str) -> String {
 
 #[rocket::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let allowed_origins = AllowedOrigins::some_exact(&["http://127.0.0.1:8081"]);
+    let allowed_origins = AllowedOrigins::some_exact(&["http://127.0.0.1:8080"]);
 
     // You can also deserialize this
     let cors = rocket_cors::CorsOptions {
