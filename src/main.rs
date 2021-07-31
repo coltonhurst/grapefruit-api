@@ -20,7 +20,8 @@ struct Member {
     email: Option<String>,
     username: Option<String>,
     guid: Option<String>,
-    new_authorization: Option<String>
+    new_authorization: Option<String>,
+    error: Option<String>
 }
 /*
 #[derive(Deserialize, Serialize)]
@@ -43,7 +44,6 @@ struct CommentContract {
     guid: Option<String>,
 }
 */
-/* ----- /v1/member ----- */
 
 fn decode_auth(encoded: &String) -> (String, String) {
   let auth = base64::decode(encoded).unwrap();
@@ -53,43 +53,32 @@ fn decode_auth(encoded: &String) -> (String, String) {
   };
   let index_of_colon = auth_string.find(':').unwrap();
 
-  return (auth_string.substring(index_of_colon+1, auth_string.chars().count()).to_string(),
-          auth_string.substring(0, index_of_colon).to_string());
+  return (auth_string.substring(0, index_of_colon).to_string(),
+          auth_string.substring(index_of_colon+1, auth_string.chars().count()).to_string());
 }
 
-/*
-  Requires:
-  - email
-  - password
-*/
 #[post("/v1/login", data = "<member>")]
 fn login(member: Json<Member>) -> Json<Member> {
     let (auth_email, auth_password) = decode_auth(&member.authorization);
+    let mut error: String = "".to_string();
 
-    if auth_email.eq("kotrunga@gmail.com") && auth_password.eq("pass") {
-      println!("The username matches!");
+    let accepted_email = "kotrunga@gmail.com".to_string();
+    let accepted_password = "pass".to_string();
+
+    if !auth_email.eq(&accepted_email) || !auth_password.eq(&accepted_password) {
+      error = "incorrect email or password".to_string();
     }
 
     let random_member = Member {
-        authorization: member.authorization.clone(),
-        email: member.email.clone(),
-        username: member.username.clone(),
-        guid: Some(String::from("fake-guid")),
-        new_authorization: None
+      authorization: member.authorization.clone(),
+      email: member.email.clone(),
+      username: member.username.clone(),
+      guid: Some(String::from("fake-guid")),
+      new_authorization: None,
+      error: Some(error)
     };
 
     return Json(random_member);
-
-
-    /*
-
-    authorization: String,
-    email: Option<String>,
-    username: Option<String>,
-    guid: Option<String>,
-    new_authorization: Option<String>
-
-    */
 }
 
 /*
