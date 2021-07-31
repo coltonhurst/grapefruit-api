@@ -81,14 +81,24 @@ fn login(member: Json<Member>) -> Json<Member> {
     return Json(random_member);
 }
 
-/*
-#[post("/v1/member", data = "<member>")]
-fn post_member(mut member: Json<MemberContract>) -> Json<MemberContract> {
-    // fake member creation
-    member.guid = Some(String::from("af9f428b-4314-4bf2-b65e-84056822044a"));
-    return member;
-}
 
+#[post("/v1/member", data = "<member>")]
+fn post_member(mut member: Json<Member>) -> Json<Member> {
+    let (auth_email, auth_password) = decode_auth(&member.authorization);
+    let mut error: String = "".to_string();
+
+    let random_member = Member {
+      authorization: member.authorization.clone(),
+      email: member.email.clone(),
+      username: member.username.clone(),
+      guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
+      new_authorization: None,
+      error: Some(error)
+    };
+    
+    return Json(random_member);
+}
+/*
 #[put("/v1/member/<guid>", data = "<member>")]
 fn put_member(guid: &str, mut member: Json<MemberContract>) -> Json<MemberContract> {
     // fake member update
@@ -175,8 +185,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "/",
             routes![
                 login,
-                /*post_member,
-                put_member,
+                post_member,
+                /*put_member,
                 delete_member,
                 get_post,
                 post_post,
