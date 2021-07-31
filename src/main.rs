@@ -1,24 +1,28 @@
 use std::error::Error;
-
+use std::str;
 use rocket::http::Method;
 use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::{get, routes};
-
 use rocket_cors::{AllowedHeaders, AllowedOrigins};
+use base64::{encode, decode};
+use substring::Substring;
 
 #[macro_use]
 extern crate rocket;
+extern crate base64;
 
-/* ----- API Contracts ------ */
+/* ----- Models ------ */
 
 #[derive(Deserialize, Serialize)]
-struct MemberContract {
-    email: String,
-    username: String,
+struct Member {
+    authorization: String,
+    email: Option<String>,
+    username: Option<String>,
     guid: Option<String>,
+    new_authorization: Option<String>
 }
-
+/*
 #[derive(Deserialize, Serialize)]
 struct PostContract {
     title: String,
@@ -38,21 +42,57 @@ struct CommentContract {
     likes: u32,
     guid: Option<String>,
 }
-
+*/
 /* ----- /v1/member ----- */
 
-#[get("/v1/member/<guid>")]
-fn get_member(guid: &str) -> Json<MemberContract> {
-    // fake member GET
-    let random_member = MemberContract {
-        email: String::from("joe@gmail.com"),
-        username: String::from("joe"),
-        guid: Some(String::from(guid)),
+fn decode_auth(encoded: &String) -> (String, String) {
+  let auth = base64::decode(encoded).unwrap();
+  let auth_string = match str::from_utf8(&auth) {
+    Ok(v) => v,
+    Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+  };
+  let index_of_colon = auth_string.find(':').unwrap();
+
+  return (auth_string.substring(index_of_colon+1, auth_string.chars().count()).to_string(),
+          auth_string.substring(0, index_of_colon).to_string());
+}
+
+/*
+  Requires:
+  - email
+  - password
+*/
+#[post("/v1/login", data = "<member>")]
+fn login(member: Json<Member>) -> Json<Member> {
+    let (auth_email, auth_password) = decode_auth(&member.authorization);
+
+    if auth_email.eq("kotrunga@gmail.com") && auth_password.eq("pass") {
+      println!("The username matches!");
+    }
+
+    let random_member = Member {
+        authorization: member.authorization.clone(),
+        email: member.email.clone(),
+        username: member.username.clone(),
+        guid: Some(String::from("fake-guid")),
+        new_authorization: None
     };
 
     return Json(random_member);
+
+
+    /*
+
+    authorization: String,
+    email: Option<String>,
+    username: Option<String>,
+    guid: Option<String>,
+    new_authorization: Option<String>
+
+    */
 }
 
+/*
 #[post("/v1/member", data = "<member>")]
 fn post_member(mut member: Json<MemberContract>) -> Json<MemberContract> {
     // fake member creation
@@ -117,12 +157,12 @@ fn put_post(guid: &str, mut post: Json<PostContract>) -> Json<PostContract> {
 fn delete_post(guid: &str) -> String {
     format!("Deleting the post with guid: {}", guid)
 }
-
+*/
 /* ----- APP START ----- */
 
 #[rocket::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let allowed_origins = AllowedOrigins::some_exact(&["http://127.0.0.1:8080"]);
+    let allowed_origins = AllowedOrigins::some_exact(&["http://127.0.0.1:8081"]);
 
     // You can also deserialize this
     let cors = rocket_cors::CorsOptions {
@@ -145,14 +185,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .mount(
             "/",
             routes![
-                get_member,
-                post_member,
+                login,
+                /*post_member,
                 put_member,
                 delete_member,
                 get_post,
                 post_post,
                 put_post,
-                delete_post
+                delete_post*/
             ],
         )
         .attach(cors)
