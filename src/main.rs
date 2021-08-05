@@ -1,24 +1,29 @@
 use std::error::Error;
-
+use std::str;
 use rocket::http::Method;
 use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::{get, routes};
-
 use rocket_cors::{AllowedHeaders, AllowedOrigins};
+use base64::{encode, decode};
+use substring::Substring;
 
 #[macro_use]
 extern crate rocket;
+extern crate base64;
 
-/* ----- API Contracts ------ */
+/* ----- Models ------ */
 
 #[derive(Deserialize, Serialize)]
-struct MemberContract {
-    email: String,
-    username: String,
+struct Member {
+    authorization: String,
+    email: Option<String>,
+    username: Option<String>,
     guid: Option<String>,
+    new_authorization: Option<String>,
+    error: Option<String>
 }
-
+/*
 #[derive(Deserialize, Serialize)]
 struct PostContract {
     title: String,
@@ -38,28 +43,62 @@ struct CommentContract {
     likes: u32,
     guid: Option<String>,
 }
+*/
 
-/* ----- /v1/member ----- */
+fn decode_auth(encoded: &String) -> (String, String) {
+  let auth = base64::decode(encoded).unwrap();
+  let auth_string = match str::from_utf8(&auth) {
+    Ok(v) => v,
+    Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+  };
+  let index_of_colon = auth_string.find(':').unwrap();
 
-#[get("/v1/member/<guid>")]
-fn get_member(guid: &str) -> Json<MemberContract> {
-    // fake member GET
-    let random_member = MemberContract {
-        email: String::from("joe@gmail.com"),
-        username: String::from("joe"),
-        guid: Some(String::from(guid)),
+  return (auth_string.substring(0, index_of_colon).to_string(),
+          auth_string.substring(index_of_colon+1, auth_string.chars().count()).to_string());
+}
+
+#[post("/v1/login", data = "<member>")]
+fn login(member: Json<Member>) -> Json<Member> {
+    let (auth_email, auth_password) = decode_auth(&member.authorization);
+    let mut error: String = "".to_string();
+
+    let accepted_email = "kotrunga@gmail.com".to_string();
+    let accepted_password = "pass".to_string();
+
+    if !auth_email.eq(&accepted_email) || !auth_password.eq(&accepted_password) {
+      error = "incorrect email or password".to_string();
+    }
+
+    let random_member = Member {
+      authorization: member.authorization.clone(),
+      email: member.email.clone(),
+      username: Some(String::from("kotrunga")),
+      guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
+      new_authorization: None,
+      error: Some(error)
     };
 
     return Json(random_member);
 }
 
-#[post("/v1/member", data = "<member>")]
-fn post_member(mut member: Json<MemberContract>) -> Json<MemberContract> {
-    // fake member creation
-    member.guid = Some(String::from("af9f428b-4314-4bf2-b65e-84056822044a"));
-    return member;
-}
 
+#[post("/v1/member", data = "<member>")]
+fn post_member(mut member: Json<Member>) -> Json<Member> {
+    let (auth_email, auth_password) = decode_auth(&member.authorization);
+    let mut error: String = "".to_string();
+
+    let random_member = Member {
+      authorization: member.authorization.clone(),
+      email: member.email.clone(),
+      username: member.username.clone(),
+      guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
+      new_authorization: None,
+      error: Some(error)
+    };
+    
+    return Json(random_member);
+}
+/*
 #[put("/v1/member/<guid>", data = "<member>")]
 fn put_member(guid: &str, mut member: Json<MemberContract>) -> Json<MemberContract> {
     // fake member update
@@ -117,7 +156,7 @@ fn put_post(guid: &str, mut post: Json<PostContract>) -> Json<PostContract> {
 fn delete_post(guid: &str) -> String {
     format!("Deleting the post with guid: {}", guid)
 }
-
+*/
 /* ----- APP START ----- */
 
 #[rocket::main]
@@ -145,14 +184,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .mount(
             "/",
             routes![
-                get_member,
+                login,
                 post_member,
-                put_member,
+                /*put_member,
                 delete_member,
                 get_post,
                 post_post,
                 put_post,
-                delete_post
+                delete_post*/
             ],
         )
         .attach(cors)
