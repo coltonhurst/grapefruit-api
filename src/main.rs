@@ -1,12 +1,15 @@
-use std::error::Error;
-use std::str;
+use base64::{decode, encode};
+use tokio_postgres::{NoTls, Error};
 use rocket::http::Method;
 use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::{get, routes};
 use rocket_cors::{AllowedHeaders, AllowedOrigins};
-use base64::{encode, decode};
+//use std::error::Error;
+use std::str;
+use rocket::serde::ser::StdError;
 use substring::Substring;
+use rocket::tokio;
 
 #[macro_use]
 extern crate rocket;
@@ -21,7 +24,14 @@ struct Member {
     username: Option<String>,
     guid: Option<String>,
     new_authorization: Option<String>,
-    error: Option<String>
+    error: Option<String>,
+}
+struct MemberTable {
+    id: i32,
+    email: String,
+    username: String,
+    pass: String,
+    guid: String,
 }
 /*
 #[derive(Deserialize, Serialize)]
@@ -46,41 +56,88 @@ struct CommentContract {
 */
 
 fn decode_auth(encoded: &String) -> (String, String) {
-  let auth = base64::decode(encoded).unwrap();
-  let auth_string = match str::from_utf8(&auth) {
-    Ok(v) => v,
-    Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-  };
-  let index_of_colon = auth_string.find(':').unwrap();
+    let auth = base64::decode(encoded).unwrap();
+    let auth_string = match str::from_utf8(&auth) {
+        Ok(v) => v,
+        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+    };
+    let index_of_colon = auth_string.find(':').unwrap();
 
-  return (auth_string.substring(0, index_of_colon).to_string(),
-          auth_string.substring(index_of_colon+1, auth_string.chars().count()).to_string());
+    return (
+        auth_string.substring(0, index_of_colon).to_string(),
+        auth_string
+            .substring(index_of_colon + 1, auth_string.chars().count())
+            .to_string(),
+    );
 }
 
 #[post("/v1/login", data = "<member>")]
-fn login(member: Json<Member>) -> Json<Member> {
+async fn login(member: Json<Member>) -> Json<Member> {
     let (auth_email, auth_password) = decode_auth(&member.authorization);
     let mut error: String = "".to_string();
 
+    
+
+      /*let mut client = Client::connect("host=localhost user=postgres password=admin dbname=grapefruit", NoTls).unwrap();
+
+      for row in client.query("SELECT id, email, username, pass, guid FROM public.members", &[]).unwrap() {
+        let id: i32 = row.get(0);
+        let email: &str = row.get(1);
+        let username: &str = row.get(2);
+        let pass: &str = row.get(3);
+        let guid: &str = row.get(4);
+
+        println!("found member: {} {} {:?}", id, username, email);
+      }*/
+      let (client, connection) = tokio_postgres::connect("host=localhost user=postgres password=admin dbname=grapefruit", NoTls).await.unwrap();
+      tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {}", e);
+        }
+    });
+
+    // Now we can execute a simple statement that just returns its parameter.
+    // let rows = client
+    //     .query("SELECT id, email, username, pass, guid FROM public.members")
+    //     .await
+    //     .unwrap();
+
+
+
+    for row in client.query("SELECT id, email, username, pass, guid FROM public.members WHERE email=$1 AND pass=$2", &[&member.email.as_ref(), &auth_password]).await.unwrap() {
+      let id: i32 = row.get(0);
+      let email: &str = row.get(1);
+      let username: &str = row.get(2);
+      let pass: &str = row.get(3);
+      let guid: &str = row.get(4);
+
+      println!("found member: {} {} {:?}", id, username, email);
+    }
+
+    // And then check that we got back the same string we sent over.
+    //let value: &str = rows[0].get(0);
+    //assert_eq!(value, "hello world");
+
+    // --
     let accepted_email = "kotrunga@gmail.com".to_string();
     let accepted_password = "pass".to_string();
 
     if !auth_email.eq(&accepted_email) || !auth_password.eq(&accepted_password) {
-      error = "incorrect email or password".to_string();
+        error = "incorrect email or password".to_string();
     }
+    // --
 
     let random_member = Member {
-      authorization: member.authorization.clone(),
-      email: member.email.clone(),
-      username: Some(String::from("kotrunga")),
-      guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
-      new_authorization: None,
-      error: Some(error)
+        authorization: member.authorization.clone(),
+        email: member.email.clone(),
+        username: Some(String::from("kotrunga")),
+        guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
+        new_authorization: None,
+        error: Some(error),
     };
 
     return Json(random_member);
 }
-
 
 #[post("/v1/member", data = "<member>")]
 fn post_member(mut member: Json<Member>) -> Json<Member> {
@@ -88,14 +145,14 @@ fn post_member(mut member: Json<Member>) -> Json<Member> {
     let mut error: String = "".to_string();
 
     let random_member = Member {
-      authorization: member.authorization.clone(),
-      email: member.email.clone(),
-      username: member.username.clone(),
-      guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
-      new_authorization: None,
-      error: Some(error)
+        authorization: member.authorization.clone(),
+        email: member.email.clone(),
+        username: member.username.clone(),
+        guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
+        new_authorization: None,
+        error: Some(error),
     };
-    
+
     return Json(random_member);
 }
 /*
@@ -160,7 +217,7 @@ fn delete_post(guid: &str) -> String {
 /* ----- APP START ----- */
 
 #[rocket::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let allowed_origins = AllowedOrigins::some_exact(&["http://127.0.0.1:8080"]);
 
     // You can also deserialize this
