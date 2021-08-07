@@ -1,15 +1,14 @@
 use base64::{decode, encode};
-use tokio_postgres::{NoTls, Error};
 use rocket::http::Method;
 use rocket::serde::json::Json;
+use rocket::serde::ser::StdError;
 use rocket::serde::{Deserialize, Serialize};
+use rocket::tokio;
 use rocket::{get, routes};
 use rocket_cors::{AllowedHeaders, AllowedOrigins};
-//use std::error::Error;
 use std::str;
-use rocket::serde::ser::StdError;
 use substring::Substring;
-use rocket::tokio;
+use tokio_postgres::{Error, NoTls};
 
 #[macro_use]
 extern crate rocket;
@@ -26,13 +25,7 @@ struct Member {
     new_authorization: Option<String>,
     error: Option<String>,
 }
-struct MemberTable {
-    id: i32,
-    email: String,
-    username: String,
-    pass: String,
-    guid: String,
-}
+
 /*
 #[derive(Deserialize, Serialize)]
 struct PostContract {
@@ -74,71 +67,61 @@ fn decode_auth(encoded: &String) -> (String, String) {
 #[post("/v1/login", data = "<member>")]
 async fn login(member: Json<Member>) -> Json<Member> {
     let (auth_email, auth_password) = decode_auth(&member.authorization);
-    let mut error: String = "".to_string();
 
-    
-
-      /*let mut client = Client::connect("host=localhost user=postgres password=admin dbname=grapefruit", NoTls).unwrap();
-
-      for row in client.query("SELECT id, email, username, pass, guid FROM public.members", &[]).unwrap() {
-        let id: i32 = row.get(0);
-        let email: &str = row.get(1);
-        let username: &str = row.get(2);
-        let pass: &str = row.get(3);
-        let guid: &str = row.get(4);
-
-        println!("found member: {} {} {:?}", id, username, email);
-      }*/
-      let (client, connection) = tokio_postgres::connect("host=localhost user=postgres password=admin dbname=grapefruit", NoTls).await.unwrap();
-      tokio::spawn(async move {
+    let (client, connection) = tokio_postgres::connect(
+        "host=localhost user=postgres password=admin dbname=grapefruit",
+        NoTls,
+    )
+    .await
+    .unwrap();
+    tokio::spawn(async move {
         if let Err(e) = connection.await {
             eprintln!("connection error: {}", e);
         }
     });
 
-    // Now we can execute a simple statement that just returns its parameter.
-    // let rows = client
-    //     .query("SELECT id, email, username, pass, guid FROM public.members")
-    //     .await
-    //     .unwrap();
-
-
-
-    for row in client.query("SELECT id, email, username, pass, guid FROM public.members WHERE email=$1 AND pass=$2", &[&member.email.as_ref(), &auth_password]).await.unwrap() {
-      let id: i32 = row.get(0);
-      let email: &str = row.get(1);
-      let username: &str = row.get(2);
-      let pass: &str = row.get(3);
-      let guid: &str = row.get(4);
-
-      println!("found member: {} {} {:?}", id, username, email);
-    }
-
-    // And then check that we got back the same string we sent over.
-    //let value: &str = rows[0].get(0);
-    //assert_eq!(value, "hello world");
-
-    // --
-    let accepted_email = "kotrunga@gmail.com".to_string();
-    let accepted_password = "pass".to_string();
-
-    if !auth_email.eq(&accepted_email) || !auth_password.eq(&accepted_password) {
-        error = "incorrect email or password".to_string();
-    }
-    // --
-
-    let random_member = Member {
+    let mut return_member = Member {
         authorization: member.authorization.clone(),
-        email: member.email.clone(),
-        username: Some(String::from("kotrunga")),
-        guid: Some(String::from("0c50569f-3a4e-4703-b4c9-f46515adeb54")),
+        email: Some(String::from("")),
+        username: Some(String::from("")),
+        guid: Some(String::from("")),
         new_authorization: None,
-        error: Some(error),
+        error: Some(String::from("")),
     };
 
-    return Json(random_member);
+    let mut guid_from_db: String = String::from("");
+    // when passing the vars in the query, can do something like this with as_ref()
+    // "SELECT id, email, username, pass, guid FROM public.members WHERE email=$1 AND pass=$2",
+    // &[&auth_email, &auth_password],
+    for row in client
+        .query(
+            "SELECT email, username, guid FROM public.members WHERE email=$1 AND pass=$2",
+            &[&auth_email, &auth_password],
+        ).await.unwrap()
+    {
+        return_member.email = row.get(0);
+        return_member.username = row.get(1);
+        guid_from_db = row.get(2);
+
+        println!("found member: {:?}", return_member.email);
+    }
+
+    return_member.guid = Some(guid_from_db.clone());
+
+    if (guid_from_db.eq("")) {
+        return_member.error = Some("incorrect email or password".to_string());
+    }
+
+    return Json(return_member);
 }
 
+/*#[put("/v1/member/<guid>", data = "<member>")]
+fn put_member(guid: &str, mut member: Json<MemberContract>) -> Json<MemberContract> {
+    // fake member update
+    member.guid = Some(String::from(guid));
+    return member;
+}*/
+/*
 #[post("/v1/member", data = "<member>")]
 fn post_member(mut member: Json<Member>) -> Json<Member> {
     let (auth_email, auth_password) = decode_auth(&member.authorization);
@@ -155,14 +138,9 @@ fn post_member(mut member: Json<Member>) -> Json<Member> {
 
     return Json(random_member);
 }
-/*
-#[put("/v1/member/<guid>", data = "<member>")]
-fn put_member(guid: &str, mut member: Json<MemberContract>) -> Json<MemberContract> {
-    // fake member update
-    member.guid = Some(String::from(guid));
-    return member;
-}
+*/
 
+/*
 #[delete("/v1/member/<guid>")]
 fn delete_member(guid: &str) -> String {
     format!("Deleting the member with guid: {}", guid)
@@ -242,7 +220,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/",
             routes![
                 login,
-                post_member,
                 /*put_member,
                 delete_member,
                 get_post,
