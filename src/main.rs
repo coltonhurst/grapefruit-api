@@ -26,6 +26,15 @@ struct Member {
     error: Option<String>,
 }
 
+#[derive(Deserialize, Serialize)]
+struct UpdateMember {
+    authorization: String,
+    email: Option<String>,
+    username: Option<String>,
+    guid: Option<String>,
+    new_authorization: String,
+    error: Option<String>,
+}
 /*
 #[derive(Deserialize, Serialize)]
 struct PostContract {
@@ -92,12 +101,14 @@ async fn login(member: Json<Member>) -> Json<Member> {
     let mut guid_from_db: String = String::from("");
     // when passing the vars in the query, can do something like this with as_ref()
     // "SELECT id, email, username, pass, guid FROM public.members WHERE email=$1 AND pass=$2",
-    // &[&auth_email, &auth_password],
+    // &[&member.email.as_ref(), &auth_password],
     for row in client
         .query(
             "SELECT email, username, guid FROM public.members WHERE email=$1 AND pass=$2",
             &[&auth_email, &auth_password],
-        ).await.unwrap()
+        )
+        .await
+        .unwrap()
     {
         return_member.email = row.get(0);
         return_member.username = row.get(1);
@@ -115,12 +126,67 @@ async fn login(member: Json<Member>) -> Json<Member> {
     return Json(return_member);
 }
 
-/*#[put("/v1/member/<guid>", data = "<member>")]
-fn put_member(guid: &str, mut member: Json<MemberContract>) -> Json<MemberContract> {
-    // fake member update
-    member.guid = Some(String::from(guid));
-    return member;
-}*/
+#[put("/v1/member/<guid>", data = "<member>")]
+async fn put_member(guid: &str, member: Json<UpdateMember>) -> Json<UpdateMember> {
+    let (auth_email, auth_password) = decode_auth(&member.authorization);
+    let (new_auth_email, new_auth_password) = decode_auth(&member.new_authorization);
+    let (client, connection) = tokio_postgres::connect(
+        "host=localhost user=postgres password=admin dbname=grapefruit",
+        NoTls,
+    )
+    .await
+    .unwrap();
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {}", e);
+        }
+    });
+
+    let mut return_member = UpdateMember {
+        authorization: member.authorization.clone(),
+        email: Some(String::from("")),
+        username: member.username.clone(),
+        guid: Some(String::from("")),
+        new_authorization: String::from(""),
+        error: Some(String::from("")),
+    };
+
+    for row in client
+        .query(
+            "UPDATE public.members SET email=$1, pass=$2 WHERE guid=$3",
+            &[&new_auth_email, &new_auth_password, &member.guid.as_ref()],
+        )
+        .await
+        .unwrap()
+    {
+    }
+
+    /*let mut guid_from_db: String = String::from("");
+    for row in client
+        .query(
+            "SELECT guid FROM public.members WHERE $1",
+            &[&new_auth_email],
+        )
+        .await
+        .unwrap()
+    {
+      guid_from_db = row.get(0);
+
+      println!("found member: {:?}", return_member.email);
+    }*/
+
+    return_member.email = Some(new_auth_email.clone());
+    return_member.username = member.username.clone();
+    return_member.guid = member.guid.clone();
+    return_member.new_authorization = member.new_authorization.clone();
+
+    /*if (guid_from_db.eq("")) {
+        return_member.error = Some("error trying to update the account".to_string());
+    }*/
+
+    return Json(return_member);
+}
+
 /*
 #[post("/v1/member", data = "<member>")]
 fn post_member(mut member: Json<Member>) -> Json<Member> {
@@ -220,8 +286,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/",
             routes![
                 login,
-                /*put_member,
-                delete_member,
+                put_member,
+                /*delete_member,
                 get_post,
                 post_post,
                 put_post,
