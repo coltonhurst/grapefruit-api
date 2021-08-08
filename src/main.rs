@@ -42,6 +42,17 @@ struct GetPostContract {
 }
 
 #[derive(Deserialize, Serialize)]
+struct CreatePostContract {
+  authorization: String,
+  guid: String,
+  author: String,
+  title: String,
+  date: String,
+  body: String,
+  likes: String,
+}
+
+#[derive(Deserialize, Serialize)]
 struct Post {
     guid: String,
     author: String,
@@ -49,6 +60,11 @@ struct Post {
     date: String,
     body: String,
     likes: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct ErrorContract {
+    error: String,
 }
 
 /*
@@ -281,6 +297,58 @@ async fn get_posts() -> Json<GetPostContract> {
 }
 
 /*
+  #[derive(Deserialize, Serialize)]
+  struct Post {
+    guid: String,
+    author: String,
+    title: String,
+    date: String,
+    body: String,
+    likes: String,
+  }
+
+  #[post("/v1/member", data = "<member>")]
+fn post_member(mut member: Json<Member>) -> Json<Member> {
+*/
+
+#[post("/v1/posts", data = "<post>")]
+async fn create_post(post: Json<CreatePostContract>) -> Json<ErrorContract> {
+  let (auth_email, auth_password) = decode_auth(&post.authorization);
+
+  let (client, connection) = tokio_postgres::connect(
+      "host=localhost user=postgres password=admin dbname=grapefruit",
+      NoTls,
+  )
+  .await
+  .unwrap();
+  tokio::spawn(async move {
+      if let Err(e) = connection.await {
+          eprintln!("connection error: {}", e);
+      }
+  });
+
+  let guid = post.guid.clone();
+  let author = post.author.clone();
+  let title = post.title.clone();
+  let date = post.date.clone();
+  let body = post.body.clone();
+  let likes = post.likes.clone();
+
+  for row in client
+      .query(
+          "INSERT INTO public.posts(guid, author, title, date, body, likes) VALUES ($1, $2, $3, $4, $5, $6)",
+          &[&guid, &author, &title, &date, &body, &likes],
+      ).await.unwrap()
+  { }
+
+  /*
+      INSERT INTO public.posts(guid, author, title, date, body, likes) VALUES ('3465f63c-3e67-42a2-90b8-d3db0bdd70c8', 'JoeVB', 'A Post Title', '2020-03-09', 'What are your thoughts on Rust?', 5);
+  */
+
+    return Json(ErrorContract { error: "".to_string() });
+}
+
+/*
 #[post("/v1/post", data = "<post>")]
 fn post_post(mut post: Json<PostContract>) -> Json<PostContract> {
     // fake post creation
@@ -330,11 +398,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             routes![
                 login,
                 put_member,
-                get_posts
-                /*delete_member,
-                post_post,
-                put_post,
-                delete_post*/
+                get_posts,
+                //create_post,
             ],
         )
         .attach(cors)
