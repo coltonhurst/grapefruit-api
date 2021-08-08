@@ -35,6 +35,31 @@ struct UpdateMember {
     new_authorization: String,
     error: Option<String>,
 }
+
+#[derive(Deserialize, Serialize)]
+struct GetPostContract {
+    posts: Vec<Post>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct Post {
+    guid: String,
+    author: String,
+    title: String,
+    date: String,
+    body: String,
+    likes: String,
+}
+
+/*
+  id INT GENERATED ALWAYS AS IDENTITY,
+  guid VARCHAR NOT NULL,
+  author VARCHAR NOT NULL,
+  date VARCHAR NOT NULL,
+  body VARCHAR NOT NULL,
+  likes VARCHAR NOT NULL
+*/
+
 /*
 #[derive(Deserialize, Serialize)]
 struct PostContract {
@@ -211,33 +236,51 @@ fn post_member(mut member: Json<Member>) -> Json<Member> {
 fn delete_member(guid: &str) -> String {
     format!("Deleting the member with guid: {}", guid)
 }
+*/
 
 /* ----- /v1/post ----- */
 
-#[get("/v1/post/<guid>")]
-fn get_post(guid: &str) -> Json<PostContract> {
-    // fake post GET
-    let random_post = PostContract {
-        title: String::from("Test Post Title"),
-        body: String::from(
-            "Here is some text that represents the post body! For right now, it's just plain text!",
-        ),
-        likes: 32,
-        guid: Some(String::from(guid)),
-        author: String::from("coltonhurst"),
-        comments: vec![CommentContract {
-            body: String::from("Hello! Great post, this is my first comment!"),
-            author: String::from("random002"),
-            creation_date: String::from("2021-07-19"),
-            likes: 12,
-            guid: Some(String::from("af9f428b-4314-4bf2-b65e-84056822044a")),
-        }],
-        creation_date: String::from("2021-07-17"),
-    };
+#[get("/v1/posts")]
+async fn get_posts() -> Json<GetPostContract> {
+  
+  let (client, connection) = tokio_postgres::connect(
+      "host=localhost user=postgres password=admin dbname=grapefruit",
+      NoTls,
+  )
+  .await
+  .unwrap();
+  tokio::spawn(async move {
+      if let Err(e) = connection.await {
+          eprintln!("connection error: {}", e);
+      }
+  });
 
-    return Json(random_post);
+  let mut posts = GetPostContract {
+      posts: Vec::new()
+  };
+
+  for row in client
+      .query(
+          "SELECT guid, author, title, date, body, likes FROM public.posts", &[],
+      )
+      .await
+      .unwrap()
+  {
+    let post = Post {
+      guid: row.get(0),
+      author: row.get(1),
+      title: row.get(2),
+      date: row.get(3),
+      body: row.get(4),
+      likes: row.get(5)
+    };
+    posts.posts.push(post);
+  }
+
+    return Json(posts);
 }
 
+/*
 #[post("/v1/post", data = "<post>")]
 fn post_post(mut post: Json<PostContract>) -> Json<PostContract> {
     // fake post creation
@@ -287,8 +330,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             routes![
                 login,
                 put_member,
+                get_posts
                 /*delete_member,
-                get_post,
                 post_post,
                 put_post,
                 delete_post*/
