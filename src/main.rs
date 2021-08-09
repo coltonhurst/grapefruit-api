@@ -399,7 +399,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 login,
                 put_member,
                 get_posts,
-                //create_post,
+                create_post,
             ],
         )
         .attach(cors)
