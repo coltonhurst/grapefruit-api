@@ -53,6 +53,12 @@ struct CreatePostContract {
 }
 
 #[derive(Deserialize, Serialize)]
+struct LikePostContract {
+  post_guid: String,
+  like_guids: String,
+}
+
+#[derive(Deserialize, Serialize)]
 struct Post {
     guid: String,
     author: String,
@@ -348,6 +354,34 @@ async fn create_post(post: Json<CreatePostContract>) -> Json<ErrorContract> {
     return Json(ErrorContract { error: "".to_string() });
 }
 
+#[put("/v1/posts", data = "<post>")]
+async fn like_post(post: Json<LikePostContract>) -> Json<ErrorContract> {
+
+  let (client, connection) = tokio_postgres::connect(
+      "host=localhost user=postgres password=admin dbname=grapefruit",
+      NoTls,
+  )
+  .await
+  .unwrap();
+  tokio::spawn(async move {
+      if let Err(e) = connection.await {
+          eprintln!("connection error: {}", e);
+      }
+  });
+
+  let post_guid = post.post_guid.clone();
+  let like_guids = post.like_guids.clone();
+
+  for row in client
+      .query(
+          "UPDATE public.posts SET likes = $1 WHERE guid = $2",
+          &[&like_guids, &post_guid],
+      ).await.unwrap()
+  { }
+  
+  return Json(ErrorContract { error: "".to_string() });
+}
+
 /*
 #[post("/v1/post", data = "<post>")]
 fn post_post(mut post: Json<PostContract>) -> Json<PostContract> {
@@ -400,6 +434,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 put_member,
                 get_posts,
                 create_post,
+                like_post
             ],
         )
         .attach(cors)
